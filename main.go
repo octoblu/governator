@@ -9,6 +9,7 @@ import (
 	"github.com/coreos/go-semver/semver"
 	"github.com/fatih/color"
 	"github.com/garyburd/redigo/redis"
+	"github.com/octoblu/go-simple-etcd-client/etcdclient"
 	"github.com/octoblu/governator/deployer"
 )
 
@@ -18,6 +19,11 @@ func main() {
 	app.Version = version()
 	app.Action = run
 	app.Flags = []cli.Flag{
+		cli.StringFlag{
+			Name:   "etcd-uri, e",
+			EnvVar: "GOVERNATOR_ETCD_URI",
+			Usage:  "Etcd server to deploy to",
+		},
 		cli.StringFlag{
 			Name:   "redis-uri, r",
 			EnvVar: "GOVERNATOR_REDIS_URI",
@@ -33,21 +39,26 @@ func main() {
 }
 
 func run(context *cli.Context) {
-	redisURI, redisQueue := getOpts(context)
+	etcdURI, redisURI, redisQueue := getOpts(context)
 
+	etcdClient := getEtcdClient(etcdURI)
 	redisConn := getRedisConn(redisURI)
 
-	theDeployer := deployer.New(redisConn, redisQueue)
+	theDeployer := deployer.New(etcdClient, redisConn, redisQueue)
 	theDeployer.Run()
 }
 
-func getOpts(context *cli.Context) (string, string) {
+func getOpts(context *cli.Context) (string, string, string) {
+	etcdURI := context.String("etcd-uri")
 	redisURI := context.String("redis-uri")
 	redisQueue := context.String("redis-queue")
 
-	if redisURI == "" || redisQueue == "" {
+	if etcdURI == "" || redisURI == "" || redisQueue == "" {
 		cli.ShowAppHelp(context)
 
+		if etcdURI == "" {
+			color.Red("  Missing required flag --etcd-uri or GOVERNATOR_ETCD_URI")
+		}
 		if redisURI == "" {
 			color.Red("  Missing required flag --redis-uri or GOVERNATOR_REDIS_URI")
 		}
@@ -57,7 +68,15 @@ func getOpts(context *cli.Context) (string, string) {
 		os.Exit(1)
 	}
 
-	return redisURI, redisQueue
+	return etcdURI, redisURI, redisQueue
+}
+
+func getEtcdClient(etcdURI string) etcdclient.EtcdClient {
+	etcdClient, err := etcdclient.New(etcdURI)
+	if err != nil {
+		log.Panicln("Error with etcdclient.New", err.Error())
+	}
+	return etcdClient
 }
 
 func getRedisConn(redisURI string) redis.Conn {
