@@ -132,6 +132,20 @@ var _ = Describe("Deployer", func() {
 						Expect(secondCall[1]).NotTo(BeNil())
 					})
 				})
+
+				Describe("When the deploy not been cancelled, but etcd Set returns an error", func() {
+					BeforeEach(func() {
+						redisConn.Command("HEXISTS", "pending-deploy-1", "cancellation").Expect(0)
+						redisConn.Command("HGET", "pending-deploy-1", "request:metadata").Expect([]byte("{\"etcdDir\":\"/octoblu/my-application\", \"dockerUrl\":\"docker_url:version\"}"))
+
+						etcdClient.SetError = fmt.Errorf("The server is gone, url is wrong, etc(d)...")
+						err = sut.Run()
+					})
+
+					It("Should error", func() {
+						Expect(err).To(MatchError("The server is gone, url is wrong, etc(d)..."))
+					})
+				})
 			})
 		})
 	})
@@ -139,6 +153,7 @@ var _ = Describe("Deployer", func() {
 
 type FakeEtcdClient struct {
 	SetCalls [][]string
+	SetError error
 }
 
 func (etcdClient *FakeEtcdClient) Get(string) (string, error) {
@@ -148,5 +163,5 @@ func (etcdClient *FakeEtcdClient) Get(string) (string, error) {
 func (etcdClient *FakeEtcdClient) Set(key, value string) error {
 	etcdClient.SetCalls = append(etcdClient.SetCalls, []string{key, value})
 
-	return nil
+	return etcdClient.SetError
 }

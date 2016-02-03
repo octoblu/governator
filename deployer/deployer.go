@@ -30,20 +30,30 @@ func New(etcdClient etcdclient.EtcdClient, redisConn redis.Conn, queueName strin
 
 // Run watches the redis queue and starts taking action
 func (deployer *Deployer) Run() error {
-	metadata, err := deployer.getNextValidDeploy()
+	deploy, err := deployer.getNextValidDeploy()
 	if err != nil {
 		return err
 	}
 
-	if metadata == nil {
+	if deploy == nil {
 		return nil
 	}
 
+	return deployer.deploy(deploy)
+}
+
+func (deployer *Deployer) deploy(metadata *RequestMetadata) error {
 	dockerURLKey := fmt.Sprintf("%v/docker_url", metadata.EtcdDir)
-	_ = deployer.etcdClient.Set(dockerURLKey, metadata.DockerURL)
+	err := deployer.etcdClient.Set(dockerURLKey, metadata.DockerURL)
+	if err != nil {
+		return err
+	}
 
 	restartKey := fmt.Sprintf("%v/restart", metadata.EtcdDir)
-	_ = deployer.etcdClient.Set(restartKey, "")
+	err = deployer.etcdClient.Set(restartKey, "")
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
