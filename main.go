@@ -8,6 +8,8 @@ import (
 	"github.com/codegangsta/cli"
 	"github.com/coreos/go-semver/semver"
 	"github.com/fatih/color"
+	"github.com/garyburd/redigo/redis"
+	"github.com/octoblu/governator/deployer"
 )
 
 func main() {
@@ -31,6 +33,15 @@ func main() {
 }
 
 func run(context *cli.Context) {
+	redisURI, redisQueue := getOpts(context)
+
+	redisConn := getRedisConn(redisURI)
+
+	theDeployer := deployer.New(redisConn, redisQueue)
+	theDeployer.Run()
+}
+
+func getOpts(context *cli.Context) (string, string) {
 	redisURI := context.String("redis-uri")
 	redisQueue := context.String("redis-queue")
 
@@ -45,6 +56,16 @@ func run(context *cli.Context) {
 		}
 		os.Exit(1)
 	}
+
+	return redisURI, redisQueue
+}
+
+func getRedisConn(redisURI string) redis.Conn {
+	redisConn, err := redis.DialURL(redisURI)
+	if err != nil {
+		log.Panicln("Error with redis.DialURL", err.Error())
+	}
+	return redisConn
 }
 
 func version() string {
