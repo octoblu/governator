@@ -7,3 +7,4 @@ github.com/octoblu/go-simple-etcd-client/etcdclient v1.0.0
 github.com/onsi/ginkgo/ginkgo
 github.com/onsi/gomega
 github.com/rafaeljusto/redigomock
+github.com/tj/go-debug

@@ -7,7 +7,10 @@ import (
 
 	"github.com/garyburd/redigo/redis"
 	"github.com/octoblu/go-simple-etcd-client/etcdclient"
+	De "github.com/tj/go-debug"
 )
+
+var debug = De.Debug("governator:deployer")
 
 // Deployer watches a redis queue
 // and deploys services using Etcd
@@ -49,8 +52,9 @@ func (deployer *Deployer) deploy(metadata *RequestMetadata) error {
 		return err
 	}
 
+	restartValue := fmt.Sprintf("%v", time.Now())
 	restartKey := fmt.Sprintf("%v/restart", metadata.EtcdDir)
-	err = deployer.etcdClient.Set(restartKey, "")
+	err = deployer.etcdClient.Set(restartKey, restartValue)
 	if err != nil {
 		return err
 	}
@@ -66,40 +70,50 @@ func (deployer *Deployer) getNextDeploy() (string, error) {
 		return "", err
 	}
 
-	deploys := deploysResult.([]string)
+	deploys := deploysResult.([]interface{})
 	if len(deploys) == 0 {
 		return "", nil
 	}
 
-	return deploys[0], nil
+	return string(deploys[0].([]byte)), nil
 }
 
 func (deployer *Deployer) lockDeploy(deploy string) (bool, error) {
+	debug("lockDeploy: %v", deploy)
 	zremResult, err := deployer.redisConn.Do("ZREM", deployer.queueName, deploy)
 
 	if err != nil {
 		return false, err
 	}
 
-	return (zremResult != 0), nil
+	result := zremResult.(int64)
+
+	return (result != 0), nil
 }
 
 func (deployer *Deployer) validateDeploy(deploy string) (bool, error) {
+	debug("validateDeploy: %v", deploy)
 	existsResult, err := deployer.redisConn.Do("HEXISTS", deploy, "cancellation")
 
 	if err != nil {
 		return false, err
 	}
 
-	return (existsResult == 0), nil
+	exists := existsResult.(int64)
+	return (exists == 0), nil
 }
 
 func (deployer *Deployer) getMetadata(deploy string) (*RequestMetadata, error) {
+	debug("getMetadata: %v", deploy)
 	var metadata RequestMetadata
 
 	metadataBytes, err := deployer.redisConn.Do("HGET", deploy, "request:metadata")
 	if err != nil {
 		return nil, err
+	}
+
+	if metadataBytes == nil {
+		return nil, fmt.Errorf("Deploy metadata not found for '%v'", deploy)
 	}
 
 	err = json.Unmarshal(metadataBytes.([]byte), &metadata)
@@ -127,6 +141,7 @@ func (deployer *Deployer) getNextValidDeploy() (*RequestMetadata, error) {
 	}
 
 	if !ok {
+		debug("Failed to obtain lock for: %v", deploy)
 		return nil, nil
 	}
 
@@ -136,6 +151,7 @@ func (deployer *Deployer) getNextValidDeploy() (*RequestMetadata, error) {
 	}
 
 	if !ok {
+		debug("Deploy was cancelled: %v", deploy)
 		return nil, nil
 	}
 

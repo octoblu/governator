@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/codegangsta/cli"
 	"github.com/coreos/go-semver/semver"
@@ -11,7 +12,10 @@ import (
 	"github.com/garyburd/redigo/redis"
 	"github.com/octoblu/go-simple-etcd-client/etcdclient"
 	"github.com/octoblu/governator/deployer"
+	De "github.com/tj/go-debug"
 )
+
+var debug = De.Debug("governator:main")
 
 func main() {
 	app := cli.NewApp()
@@ -45,7 +49,15 @@ func run(context *cli.Context) {
 	redisConn := getRedisConn(redisURI)
 
 	theDeployer := deployer.New(etcdClient, redisConn, redisQueue)
-	theDeployer.Run()
+
+	for {
+		debug("theDeployer.Run()")
+		err := theDeployer.Run()
+		if err != nil {
+			log.Panic("Run error", err)
+		}
+		time.Sleep(1 * time.Second)
+	}
 }
 
 func getOpts(context *cli.Context) (string, string, string) {

@@ -32,7 +32,8 @@ var _ = Describe("Deployer", func() {
 		Describe("When there are no pending deploys", func() {
 			BeforeEach(func() {
 				now := time.Now().Unix()
-				redisConn.Command("ZRANGEBYSCORE", "redis-queue:name", 0, now).Expect([]string{})
+
+				redisConn.Command("ZRANGEBYSCORE", "redis-queue:name", 0, now).Expect([]interface{}{})
 				err = sut.Run()
 			})
 
@@ -56,7 +57,7 @@ var _ = Describe("Deployer", func() {
 		Describe("When there are is a pending deploy that should not go out yet", func() {
 			BeforeEach(func() {
 				now := time.Now().Unix()
-				redisConn.Command("ZRANGEBYSCORE", "redis-queue:name", 0, now).Expect([]string{})
+				redisConn.Command("ZRANGEBYSCORE", "redis-queue:name", 0, now).Expect([]interface{}{})
 				err = sut.Run()
 			})
 
@@ -68,7 +69,8 @@ var _ = Describe("Deployer", func() {
 		Describe("When there are is a pending deploy that should go out", func() {
 			BeforeEach(func() {
 				now := time.Now().Unix()
-				pendingDeploys := []string{"pending-deploy-1"}
+				pendingDeploys := make([]interface{}, 1)
+				pendingDeploys[0] = []byte("pending-deploy-1")
 				redisConn.Command("ZRANGEBYSCORE", "redis-queue:name", 0, now).Expect(pendingDeploys)
 			})
 
@@ -76,7 +78,7 @@ var _ = Describe("Deployer", func() {
 				var zrem *redigomock.Cmd
 
 				BeforeEach(func() {
-					zrem = redisConn.Command("ZREM", "redis-queue:name", "pending-deploy-1").Expect(0)
+					zrem = redisConn.Command("ZREM", "redis-queue:name", "pending-deploy-1").Expect(int64(0))
 					sut.Run()
 				})
 
@@ -98,12 +100,12 @@ var _ = Describe("Deployer", func() {
 
 			Describe("When attempting to ZREM the record succeeds", func() {
 				BeforeEach(func() {
-					redisConn.Command("ZREM", "redis-queue:name", "pending-deploy-1").Expect(1)
+					redisConn.Command("ZREM", "redis-queue:name", "pending-deploy-1").Expect(int64(1))
 				})
 
 				Describe("When the deploy has been cancelled", func() {
 					BeforeEach(func() {
-						redisConn.Command("HEXISTS", "pending-deploy-1", "cancellation").Expect(1)
+						redisConn.Command("HEXISTS", "pending-deploy-1", "cancellation").Expect(int64(1))
 						err = sut.Run()
 					})
 
@@ -114,28 +116,44 @@ var _ = Describe("Deployer", func() {
 
 				Describe("When the deploy not been cancelled", func() {
 					BeforeEach(func() {
-						redisConn.Command("HEXISTS", "pending-deploy-1", "cancellation").Expect(0)
-						redisConn.Command("HGET", "pending-deploy-1", "request:metadata").Expect([]byte("{\"etcdDir\":\"/octoblu/my-application\", \"dockerUrl\":\"docker_url:version\"}"))
-
-						err = sut.Run()
+						redisConn.Command("HEXISTS", "pending-deploy-1", "cancellation").Expect(int64(0))
 					})
 
-					It("Should update the application's docker url", func() {
-						firstCall := etcdClient.SetCalls[0]
-						Expect(firstCall[0]).To(Equal("/octoblu/my-application/docker_url"))
-						Expect(firstCall[1]).To(Equal("docker_url:version"))
+					Describe("When the metadata doesn't exist", func() {
+						BeforeEach(func() {
+							redisConn.Command("HGET", "pending-deploy-1", "request:metadata").Expect(nil)
+							err = sut.Run()
+						})
+
+						It("Should return an error", func() {
+							Expect(err).To(MatchError("Deploy metadata not found for 'pending-deploy-1'"))
+						})
 					})
 
-					It("Should touch restart", func() {
-						secondCall := etcdClient.SetCalls[1]
-						Expect(secondCall[0]).To(Equal("/octoblu/my-application/restart"))
-						Expect(secondCall[1]).NotTo(BeNil())
+					Describe("When the metadata exists", func() {
+						BeforeEach(func() {
+							redisConn.Command("HGET", "pending-deploy-1", "request:metadata").Expect([]byte("{\"etcdDir\":\"/octoblu/my-application\", \"dockerUrl\":\"docker_url:version\"}"))
+
+							err = sut.Run()
+						})
+
+						It("Should update the application's docker url", func() {
+							firstCall := etcdClient.SetCalls[0]
+							Expect(firstCall[0]).To(Equal("/octoblu/my-application/docker_url"))
+							Expect(firstCall[1]).To(Equal("docker_url:version"))
+						})
+
+						It("Should touch restart", func() {
+							secondCall := etcdClient.SetCalls[1]
+							Expect(secondCall[0]).To(Equal("/octoblu/my-application/restart"))
+							Expect(secondCall[1]).NotTo(BeNil())
+						})
 					})
 				})
 
 				Describe("When the deploy not been cancelled, but etcd Set returns an error", func() {
 					BeforeEach(func() {
-						redisConn.Command("HEXISTS", "pending-deploy-1", "cancellation").Expect(0)
+						redisConn.Command("HEXISTS", "pending-deploy-1", "cancellation").Expect(int64(0))
 						redisConn.Command("HGET", "pending-deploy-1", "request:metadata").Expect([]byte("{\"etcdDir\":\"/octoblu/my-application\", \"dockerUrl\":\"docker_url:version\"}"))
 
 						etcdClient.SetError = fmt.Errorf("The server is gone, url is wrong, etc(d)...")
