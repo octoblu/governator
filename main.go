@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/codegangsta/cli"
@@ -49,8 +51,23 @@ func run(context *cli.Context) {
 	redisConn := getRedisConn(redisURI)
 
 	theDeployer := deployer.New(etcdClient, redisConn, redisQueue)
+	sigTerm := make(chan os.Signal)
+	signal.Notify(sigTerm, syscall.SIGTERM)
+
+	sigTermReceived := false
+
+	go func() {
+		<-sigTerm
+		fmt.Println("SIGTERM received, waiting to exit")
+		sigTermReceived = true
+	}()
 
 	for {
+		if sigTermReceived {
+			fmt.Println("I'll be back.")
+			os.Exit(0)
+		}
+
 		debug("theDeployer.Run()")
 		err := theDeployer.Run()
 		if err != nil {
@@ -84,7 +101,7 @@ func getOpts(context *cli.Context) (string, string, string) {
 }
 
 func getEtcdClient(etcdURI string) etcdclient.EtcdClient {
-	etcdClient, err := etcdclient.New(etcdURI)
+	etcdClient, err := etcdclient.Dial(etcdURI)
 	if err != nil {
 		log.Panicln("Error with etcdclient.New", err.Error())
 	}
