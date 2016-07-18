@@ -143,10 +143,16 @@ var _ = Describe("Deployer", func() {
 							Expect(firstCall[1]).To(Equal("docker_url:version"))
 						})
 
-						It("Should touch restart", func() {
+						It("Should update the application's sentry release", func() {
 							secondCall := etcdClient.SetCalls[1]
-							Expect(secondCall[0]).To(Equal("/octoblu/my-application/restart"))
-							Expect(secondCall[1]).NotTo(BeNil())
+							Expect(secondCall[0]).To(Equal("/octoblu/my-application/env/SENTRY_RELEASE"))
+							Expect(secondCall[1]).To(Equal("version"))
+						})
+
+						It("Should touch restart", func() {
+							thirdCall := etcdClient.SetCalls[2]
+							Expect(thirdCall[0]).To(Equal("/octoblu/my-application/restart"))
+							Expect(thirdCall[1]).NotTo(BeNil())
 						})
 					})
 				})

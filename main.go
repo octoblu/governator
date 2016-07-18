@@ -117,10 +117,9 @@ func getRedisConn(redisURI string) redis.Conn {
 }
 
 func version() string {
-	versionStr := "1.0.0"
-	version, err := semver.NewVersion(versionStr)
+	version, err := semver.NewVersion(VERSION)
 	if err != nil {
-		errorMessage := fmt.Sprintf("Error with version number: %v", versionStr)
+		errorMessage := fmt.Sprintf("Error with version number: %v", VERSION)
 		log.Panicln(errorMessage, err.Error())
 	}
 	return version.String()

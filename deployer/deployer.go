@@ -3,6 +3,7 @@ package deployer
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/garyburd/redigo/redis"
@@ -45,9 +46,21 @@ func (deployer *Deployer) Run() error {
 	return deployer.deploy(deploy)
 }
 
+func (deployer *Deployer) getReleaseVersion(dockerURL string) string {
+	parts := strings.Split(dockerURL, ":")
+	return parts[len(parts)-1]
+}
+
 func (deployer *Deployer) deploy(metadata *RequestMetadata) error {
+	var err error
 	dockerURLKey := fmt.Sprintf("%v/docker_url", metadata.EtcdDir)
-	err := deployer.etcdClient.Set(dockerURLKey, metadata.DockerURL)
+	err = deployer.etcdClient.Set(dockerURLKey, metadata.DockerURL)
+	if err != nil {
+		return err
+	}
+
+	releaseKey := fmt.Sprintf("%v/env/SENTRY_RELEASE", metadata.EtcdDir)
+	err = deployer.etcdClient.Set(releaseKey, deployer.getReleaseVersion(metadata.DockerURL))
 	if err != nil {
 		return err
 	}
