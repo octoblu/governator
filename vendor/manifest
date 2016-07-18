@@ -99,7 +99,7 @@
 			"importpath": "github.com/octoblu/go-simple-etcd-client/etcdclient",
 			"repository": "https://github.com/octoblu/go-simple-etcd-client",
 			"vcs": "git",
-			"revision": "bf915d63035303b1676919e38300b9e76daf50f5",
+			"revision": "83ea6cb2f60988064a9c0695170c3b3ddbdabaad",
 			"branch": "master",
 			"path": "/etcdclient",
 			"notests": true

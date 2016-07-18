@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/garyburd/redigo/redis"
-	"github.com/octoblu/go-simple-etcd-client/etcdclient"
 	De "github.com/tj/go-debug"
 )
 
@@ -16,7 +15,7 @@ var debug = De.Debug("governator:deployer")
 // Deployer watches a redis queue
 // and deploys services using Etcd
 type Deployer struct {
-	etcdClient etcdclient.EtcdClient
+	etcdClient EtcdClient
 	redisConn  redis.Conn
 	queueName  string
 }
@@ -28,7 +27,7 @@ type RequestMetadata struct {
 }
 
 // New constructs a new deployer instance
-func New(etcdClient etcdclient.EtcdClient, redisConn redis.Conn, queueName string) *Deployer {
+func New(etcdClient EtcdClient, redisConn redis.Conn, queueName string) *Deployer {
 	return &Deployer{etcdClient, redisConn, queueName}
 }
 
