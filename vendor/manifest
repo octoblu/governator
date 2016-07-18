@@ -105,6 +105,14 @@
 			"notests": true
 		},
 		{
+			"importpath": "github.com/onsi/ginkgo",
+			"repository": "https://github.com/onsi/ginkgo",
+			"vcs": "git",
+			"revision": "7d3240191d7b2311b60090fcbc96e56bffc45ec0",
+			"branch": "master",
+			"notests": true
+		},
+		{
 			"importpath": "github.com/onsi/ginkgo/config",
 			"repository": "https://github.com/onsi/ginkgo",
 			"vcs": "git",
