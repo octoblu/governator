@@ -40,17 +40,27 @@ func main() {
 			EnvVar: "GOVERNATOR_REDIS_QUEUE",
 			Usage:  "Redis queue to pull deployments from",
 		},
+		cli.StringFlag{
+			Name:   "deploy-state-uri",
+			EnvVar: "DEPLOY_STATE_URI",
+			Usage:  "Deploy state uri, it should include authentication.",
+		},
+		cli.StringFlag{
+			Name:   "cluster",
+			EnvVar: "CLUSTER",
+			Usage:  "The current running cluster",
+		},
 	}
 	app.Run(os.Args)
 }
 
 func run(context *cli.Context) {
-	etcdURI, redisURI, redisQueue := getOpts(context)
+	etcdURI, redisURI, redisQueue, deployStateUri, cluster := getOpts(context)
 
 	etcdClient := getEtcdClient(etcdURI)
 	redisConn := getRedisConn(redisURI)
 
-	theDeployer := deployer.New(etcdClient, redisConn, redisQueue)
+	theDeployer := deployer.New(etcdClient, redisConn, redisQueue, deployStateUri, cluster)
 	sigTerm := make(chan os.Signal)
 	signal.Notify(sigTerm, syscall.SIGTERM)
 
@@ -77,12 +87,14 @@ func run(context *cli.Context) {
 	}
 }
 
-func getOpts(context *cli.Context) (string, string, string) {
+func getOpts(context *cli.Context) (string, string, string, string, string) {
 	etcdURI := context.String("etcd-uri")
 	redisURI := context.String("redis-uri")
 	redisQueue := context.String("redis-queue")
+	deployStateUri := context.String("deploy-state-uri")
+	cluster := context.String("cluster")
 
-	if etcdURI == "" || redisURI == "" || redisQueue == "" {
+	if etcdURI == "" || redisURI == "" || redisQueue == "" || deployStateUri == "" || cluster == "" {
 		cli.ShowAppHelp(context)
 
 		if etcdURI == "" {
@@ -94,10 +106,16 @@ func getOpts(context *cli.Context) (string, string, string) {
 		if redisQueue == "" {
 			color.Red("  Missing required flag --redis-queue or GOVERNATOR_REDIS_QUEUE")
 		}
+		if deployStateUri == "" {
+			color.Red("  Missing required flag --deploy-state-uri or DEPLOY_STATE_URI")
+		}
+		if cluster == "" {
+			color.Red("  Missing required flag --cluster or CLUSTER")
+		}
 		os.Exit(1)
 	}
 
-	return etcdURI, redisURI, redisQueue
+	return etcdURI, redisURI, redisQueue, deployStateUri, cluster
 }
 
 func getEtcdClient(etcdURI string) etcdclient.EtcdClient {

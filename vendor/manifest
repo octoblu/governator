@@ -80,6 +80,14 @@
 			"notests": true
 		},
 		{
+			"importpath": "github.com/jarcoal/httpmock",
+			"repository": "https://github.com/jarcoal/httpmock",
+			"vcs": "git",
+			"revision": "145b10d659265440f062c31ea15326166bae56ee",
+			"branch": "master",
+			"notests": true
+		},
+		{
 			"importpath": "github.com/mattn/go-colorable",
 			"repository": "https://github.com/mattn/go-colorable",
 			"vcs": "git",

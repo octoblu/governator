@@ -2,7 +2,9 @@ package deployer
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -15,9 +17,11 @@ var debug = De.Debug("governator:deployer")
 // Deployer watches a redis queue
 // and deploys services using Etcd
 type Deployer struct {
-	etcdClient EtcdClient
-	redisConn  redis.Conn
-	queueName  string
+	etcdClient     EtcdClient
+	redisConn      redis.Conn
+	queueName      string
+	deployStateUri string
+	cluster        string
 }
 
 // RequestMetadata is the metadata of the request
@@ -27,8 +31,14 @@ type RequestMetadata struct {
 }
 
 // New constructs a new deployer instance
-func New(etcdClient EtcdClient, redisConn redis.Conn, queueName string) *Deployer {
-	return &Deployer{etcdClient, redisConn, queueName}
+func New(etcdClient EtcdClient, redisConn redis.Conn, queueName, deployStateUri, cluster string) *Deployer {
+	return &Deployer{
+		etcdClient:     etcdClient,
+		redisConn:      redisConn,
+		queueName:      queueName,
+		deployStateUri: deployStateUri,
+		cluster:        cluster,
+	}
 }
 
 // Run watches the redis queue and starts taking action
@@ -67,6 +77,11 @@ func (deployer *Deployer) deploy(metadata *RequestMetadata) error {
 	restartValue := fmt.Sprintf("%v", time.Now())
 	restartKey := fmt.Sprintf("%v/restart", metadata.EtcdDir)
 	err = deployer.etcdClient.Set(restartKey, restartValue)
+	if err != nil {
+		return err
+	}
+
+	err = deployer.notifyDeployState(metadata.DockerURL)
 	if err != nil {
 		return err
 	}
@@ -168,4 +183,51 @@ func (deployer *Deployer) getNextValidDeploy() (*RequestMetadata, error) {
 	}
 
 	return deployer.getMetadata(deploy)
+}
+
+func (deployer *Deployer) notifyDeployState(dockerURL string) error {
+	var owner, repo, tag string
+
+	dockerURLParts := strings.Split(dockerURL, ":")
+
+	if len(dockerURLParts) != 2 {
+		return errors.New("invalid docker url")
+	}
+
+	if dockerURLParts[1] != "" {
+		tag = dockerURLParts[1]
+	}
+
+	projectParts := strings.Split(dockerURLParts[0], "/")
+
+	if len(projectParts) == 2 {
+		owner = projectParts[0]
+		repo = projectParts[1]
+	} else if len(projectParts) == 3 {
+		owner = projectParts[1]
+		repo = projectParts[2]
+	} else {
+		return errors.New("invalid base docker url")
+	}
+
+	uri := fmt.Sprintf("deployments/%s/%s/%s/cluster/%s/passed", owner, repo, tag, deployer.cluster)
+	fullUrl := fmt.Sprintf("%s/%s", deployer.deployStateUri, uri)
+
+	debug("making request to %s", fullUrl)
+	client := &http.Client{}
+	request, err := http.NewRequest("PUT", fullUrl, nil)
+	if err != nil {
+		return err
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return err
+	}
+	debug("Response StatusCode %v", response.StatusCode)
+
+	response.Body.Close()
+	if response.StatusCode > 399 {
+		return errors.New("invalid response from deploy-state-service")
+	}
+	return nil
 }
