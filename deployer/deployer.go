@@ -60,6 +60,10 @@ func (deployer *Deployer) getReleaseVersion(dockerURL string) string {
 	return parts[len(parts)-1]
 }
 
+func (deployer *Deployer) getKey(key string) string {
+	return fmt.Sprintf("%s:%s", deployer.queueName, key)
+}
+
 func (deployer *Deployer) deploy(metadata *RequestMetadata) error {
 	var err error
 	dockerURLKey := fmt.Sprintf("%v/docker_url", metadata.EtcdDir)
@@ -91,7 +95,7 @@ func (deployer *Deployer) deploy(metadata *RequestMetadata) error {
 
 func (deployer *Deployer) getNextDeploy() (string, error) {
 	now := time.Now().Unix()
-	deploysResult, err := deployer.redisConn.Do("ZRANGEBYSCORE", deployer.queueName, 0, now)
+	deploysResult, err := deployer.redisConn.Do("ZRANGEBYSCORE", deployer.getKey("governator:deploys"), 0, now)
 
 	if err != nil {
 		return "", err
@@ -107,7 +111,7 @@ func (deployer *Deployer) getNextDeploy() (string, error) {
 
 func (deployer *Deployer) lockDeploy(deploy string) (bool, error) {
 	debug("lockDeploy: %v", deploy)
-	zremResult, err := deployer.redisConn.Do("ZREM", deployer.queueName, deploy)
+	zremResult, err := deployer.redisConn.Do("ZREM", deployer.getKey("governator:deploys"), deploy)
 
 	if err != nil {
 		return false, err
@@ -120,7 +124,7 @@ func (deployer *Deployer) lockDeploy(deploy string) (bool, error) {
 
 func (deployer *Deployer) validateDeploy(deploy string) (bool, error) {
 	debug("validateDeploy: %v", deploy)
-	existsResult, err := deployer.redisConn.Do("HEXISTS", deploy, "cancellation")
+	existsResult, err := deployer.redisConn.Do("HEXISTS", deployer.getKey(deploy), "cancellation")
 
 	if err != nil {
 		return false, err
@@ -134,7 +138,7 @@ func (deployer *Deployer) getMetadata(deploy string) (*RequestMetadata, error) {
 	debug("getMetadata: %v", deploy)
 	var metadata RequestMetadata
 
-	metadataBytes, err := deployer.redisConn.Do("HGET", deploy, "request:metadata")
+	metadataBytes, err := deployer.redisConn.Do("HGET", deployer.getKey(deploy), "request:metadata")
 	if err != nil {
 		return nil, err
 	}
